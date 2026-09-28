@@ -19,8 +19,12 @@ skill), or use any tool that loads SKILL.md-based skills.
 
 ## What it does
 
-1. `GET .../extract?url=<URL>` → HTTP 402 with `price_xno` / `pay_to`.
-2. Pay exactly `price_xno` XNO to `pay_to` from your own wallet.
+1. `GET .../extract?url=<URL>` (the `url` parameter must be URL-encoded) →
+   HTTP 200 with `payment.free_trial: true` when a trial is available (use the
+   content directly), or HTTP 402 with `price_xno` / `pay_to`.
+2. Only on HTTP 402: check the challenge (x402 v2, exact scheme on
+   `nano:mainnet`, asset XNO, price exactly 0.0001 XNO), get the user's approval,
+   then pay exactly `price_xno` XNO to `pay_to` from your own wallet.
 3. Retry with the settled block hash as `X-PAYMENT` → HTTP 200 + clean text.
 
 See `SKILL.md` for the full runbook.
@@ -29,7 +33,7 @@ See `SKILL.md` for the full runbook.
 
 `https://extract.paypercall.dev/api/v1/extract`
 
-Verified live 2026-09-24: answers HTTP 402 with `price_xno: 0.0001`,
+Verified live 2026-09-28: without a trial it answers HTTP 402 with `price_xno: 0.0001`,
 `pay_to: nano_1yo6c1t64a...`, `accepts[0].network: nano:mainnet`,
 `asset: XNO` (x402 v2 exact scheme).
 

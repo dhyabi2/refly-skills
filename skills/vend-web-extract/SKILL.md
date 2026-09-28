@@ -32,13 +32,22 @@ Provide input as JSON:
 
 ## Execution
 
-### Step 1: Request the page — expect HTTP 402 with the payment challenge
+### Step 1: Request the page — use a free-trial response or read the payment challenge
+
+Pass the page URL URL-encoded (`-G --data-urlencode`), so query and fragment
+characters in it cannot change the outer query:
 
 ```bash
-curl -s "https://extract.paypercall.dev/api/v1/extract?url=<URL>"
+curl -s -w '\nHTTP %{http_code}\n' -G \
+  --data-urlencode "url=$URL" \
+  "https://extract.paypercall.dev/api/v1/extract"
 ```
 
-The endpoint answers **HTTP 402** with JSON like:
+If the endpoint answers **HTTP 200** with `payment.free_trial: true`, use the
+returned `text` or `markdown` directly, report `payment.trial_remaining`, and
+stop here — no payment is needed.
+
+Otherwise it answers **HTTP 402** with JSON like:
 
 ```json
 {
@@ -50,9 +59,17 @@ The endpoint answers **HTTP 402** with JSON like:
 }
 ```
 
-Read `price_xno` and `pay_to` from the response.
+Read `price_xno`, `pay_to` and `accepts` from the response, and validate them
+before sending anything:
 
-### Step 2: Pay exactly `price_xno` XNO to `pay_to` from your wallet
+- Reject the challenge unless `x402Version` is 2 and `accepts` contains an entry
+  with `scheme: "exact"`, `network: "nano:mainnet"`, `asset: "XNO"` whose
+  `payTo` equals `pay_to`.
+- Reject it unless `price_xno` is exactly 0.0001 XNO (the documented per-call
+  price) and within the per-call limit the user approved.
+- Ask the user to approve the exact amount and recipient before paying.
+
+### Step 2: Only after an HTTP 402 — pay exactly `price_xno` XNO to `pay_to`
 
 Using any Nano wallet or a CLI (e.g. `feeless402`/`nano-pay`):
 
@@ -67,8 +84,10 @@ The tx settles on-chain in roughly one second at zero fee. Capture the
 ### Step 3: Retry with the settled block hash — HTTP 200 with the text
 
 ```bash
-curl -s -H "X-PAYMENT: <64-char block hash>" \
-  "https://extract.paypercall.dev/api/v1/extract?url=<URL>"
+curl -s -w '\nHTTP %{http_code}\n' -G \
+  -H "X-PAYMENT: <64-char block hash>" \
+  --data-urlencode "url=$URL" \
+  "https://extract.paypercall.dev/api/v1/extract"
 ```
 
 This returns HTTP 200 with the extracted clean text/markdown.
@@ -88,5 +107,6 @@ This returns HTTP 200 with the extracted clean text/markdown.
   that they are not authorised to reuse. The block hash is throwaway proof of
   payment, not a secret.
 - Keep to the quoted `price_xno` exactly — overpayment is not refunded.
-- If the endpoint returns anything other than 402 then 200 on retry, report the
-  exact HTTP status and body instead of guessing.
+- If the endpoint returns anything other than a free-trial 200, or 402 then 200
+  on retry, report the exact HTTP status (printed by `-w`) and body instead of
+  guessing.
