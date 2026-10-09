@@ -47,7 +47,7 @@ If the endpoint answers **HTTP 200** with `payment.free_trial: true`, use the
 returned `text` or `markdown` directly, report `payment.trial_remaining`, and
 stop here — no payment is needed.
 
-Otherwise it answers **HTTP 402** with JSON like:
+If the status is **HTTP 402**, it carries a payment challenge like this:
 
 ```json
 {
@@ -55,12 +55,16 @@ Otherwise it answers **HTTP 402** with JSON like:
   "price_xno": 0.0001,
   "pay_to": "nano_1yo6c1t64a...",
   "x402Version": 2,
-  "accepts": [{"scheme": "exact", "network": "nano:mainnet", "asset": "XNO"}]
+  "accepts": [{"scheme": "exact", "network": "nano:mainnet", "asset": "XNO",
+               "payTo": "nano_1yo6c1t64a..."}]
 }
 ```
 
-Read `price_xno`, `pay_to` and `accepts` from the response, and validate them
-before sending anything:
+For any other status (including a 200 without `payment.free_trial: true`),
+report the status and body and stop. Do not parse it as a challenge.
+
+Read `price_xno`, `pay_to` and `accepts` from the 402 response, and validate
+them before sending anything:
 
 - Reject the challenge unless `x402Version` is 2 and `accepts` contains an entry
   with `scheme: "exact"`, `network: "nano:mainnet"`, `asset: "XNO"` whose
